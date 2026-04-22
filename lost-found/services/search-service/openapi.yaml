@@ -1,0 +1,113 @@
+openapi: "3.0.3"
+info:
+  title: Search Service API
+  version: "1.0.0"
+  description: Full-text search and filtering across items using OpenSearch.
+
+components:
+  schemas:
+    Error:
+      type: object
+      properties:
+        error: { type: string }
+
+    SearchResult:
+      type: object
+      properties:
+        id:          { type: integer }
+        type:        { type: string, enum: [lost, found] }
+        title:       { type: string }
+        description: { type: string }
+        category:    { type: string }
+        location:    { type: string }
+        date:        { type: string, format: date }
+        imageUrl:    { type: string }
+        score:       { type: number, description: Relevance score from OpenSearch }
+
+paths:
+  /search:
+    get:
+      summary: Full-text search across all items
+      description: >
+        Searches title and description fields using OpenSearch full-text matching.
+        Results are sorted by relevance score descending.
+      parameters:
+        - name: q
+          in: query
+          required: true
+          description: Search query string
+          schema: { type: string, minLength: 2, example: "black leather wallet" }
+        - name: type
+          in: query
+          schema: { type: string, enum: [lost, found] }
+        - name: category
+          in: query
+          schema: { type: string }
+        - name: location
+          in: query
+          description: Partial location match
+          schema: { type: string }
+        - name: dateFrom
+          in: query
+          schema: { type: string, format: date }
+        - name: dateTo
+          in: query
+          schema: { type: string, format: date }
+        - name: page
+          in: query
+          schema: { type: integer, default: 1 }
+        - name: limit
+          in: query
+          schema: { type: integer, default: 20, maximum: 50 }
+      responses:
+        "200":
+          description: Search results with relevance scores
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  results:
+                    type: array
+                    items: { $ref: "#/components/schemas/SearchResult" }
+                  total:    { type: integer }
+                  page:     { type: integer }
+                  pages:    { type: integer }
+                  query:    { type: string }
+        "400":
+          description: Query too short or invalid
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /search/suggest:
+    get:
+      summary: Autocomplete suggestions as user types
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema: { type: string, minLength: 2 }
+      responses:
+        "200":
+          description: List of suggested completions
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  suggestions:
+                    type: array
+                    items: { type: string }
+                    example: ["black wallet", "black bag", "black phone"]
+
+  /health:
+    get:
+      summary: Health check
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                properties:
+                  status: { type: string, example: ok }

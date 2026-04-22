@@ -1,0 +1,222 @@
+openapi: "3.0.3"
+info:
+  title: Admin Service API
+  version: "1.0.0"
+  description: >
+    Admin dashboard backend. All endpoints require admin role JWT.
+    Aggregates data from other services via the Internal ALB.
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    Error:
+      type: object
+      properties:
+        error: { type: string }
+
+    UserAdmin:
+      type: object
+      properties:
+        id:        { type: integer }
+        email:     { type: string }
+        name:      { type: string }
+        role:      { type: string, enum: [user, admin] }
+        status:    { type: string, enum: [active, suspended, banned] }
+        itemCount: { type: integer }
+        createdAt: { type: string, format: date-time }
+        lastLogin: { type: string, format: date-time }
+
+    Analytics:
+      type: object
+      properties:
+        totalUsers:      { type: integer }
+        totalItems:      { type: integer }
+        openItems:       { type: integer }
+        matchedItems:    { type: integer }
+        claimedItems:    { type: integer }
+        totalMatches:    { type: integer }
+        itemsByCategory:
+          type: array
+          items:
+            properties:
+              category: { type: string }
+              count:    { type: integer }
+        itemsByDay:
+          type: array
+          items:
+            properties:
+              date:  { type: string, format: date }
+              lost:  { type: integer }
+              found: { type: integer }
+
+# All routes require admin JWT — apply globally
+security:
+  - bearerAuth: []
+
+paths:
+  # ── Users ─────────────────────────────────────────────────────────────────
+  /admin/users:
+    get:
+      summary: List all users with pagination
+      parameters:
+        - name: page   { in: query, schema: { type: integer, default: 1 } }
+        - name: limit  { in: query, schema: { type: integer, default: 50 } }
+        - name: status { in: query, schema: { type: string, enum: [active, suspended, banned] } }
+        - name: search { in: query, schema: { type: string }, description: Search by name or email }
+      responses:
+        "200":
+          description: Paginated user list
+          content:
+            application/json:
+              schema:
+                properties:
+                  users:
+                    type: array
+                    items: { $ref: "#/components/schemas/UserAdmin" }
+                  total: { type: integer }
+        "403": { description: Admin role required }
+
+  /admin/users/{id}:
+    get:
+      summary: Get detailed user profile
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UserAdmin" }
+        "404": { description: User not found }
+
+  /admin/users/{id}/suspend:
+    post:
+      summary: Suspend a user account
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              properties:
+                reason: { type: string }
+      responses:
+        "200": { description: User suspended }
+        "404": { description: User not found }
+
+  /admin/users/{id}/ban:
+    post:
+      summary: Permanently ban a user
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200": { description: User banned }
+
+  # ── Items Moderation ───────────────────────────────────────────────────────
+  /admin/items:
+    get:
+      summary: List all items for moderation
+      parameters:
+        - name: status   { in: query, schema: { type: string } }
+        - name: flagged  { in: query, schema: { type: boolean }, description: Show only flagged items }
+        - name: page     { in: query, schema: { type: integer, default: 1 } }
+      responses:
+        "200":
+          description: Items for moderation
+          content:
+            application/json:
+              schema:
+                properties:
+                  items: { type: array }
+                  total: { type: integer }
+
+  /admin/items/{id}/remove:
+    post:
+      summary: Remove an item (moderator action)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              properties:
+                reason: { type: string }
+      responses:
+        "200": { description: Item removed }
+
+  # ── Claims ─────────────────────────────────────────────────────────────────
+  /admin/claims:
+    get:
+      summary: List all pending claims
+      parameters:
+        - name: status { in: query, schema: { type: string, enum: [pending, approved, rejected] } }
+      responses:
+        "200":
+          description: Claims list
+
+  /admin/claims/{id}/approve:
+    post:
+      summary: Approve a claim — triggers notification to both users
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200": { description: Claim approved — notifications sent }
+
+  /admin/claims/{id}/reject:
+    post:
+      summary: Reject a claim
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              properties:
+                reason: { type: string }
+      responses:
+        "200": { description: Claim rejected }
+
+  # ── Analytics ──────────────────────────────────────────────────────────────
+  /admin/analytics:
+    get:
+      summary: Dashboard analytics — item counts, match rates, category breakdown
+      responses:
+        "200":
+          description: Analytics data
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Analytics" }
+
+  /health:
+    get:
+      summary: Health check
+      security: []   # No auth required for health checks
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                properties:
+                  status: { type: string, example: ok }

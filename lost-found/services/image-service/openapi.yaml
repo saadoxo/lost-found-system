@@ -1,0 +1,381 @@
+openapi: 3.0.3
+
+info:
+  title: Admin Service API
+  version: "1.0.0"
+  description: >
+    Admin dashboard backend. All endpoints require admin role JWT.
+    Aggregates data from other services via the Internal ALB.
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+
+    UserAdmin:
+      type: object
+      properties:
+        id:
+          type: integer
+        email:
+          type: string
+        name:
+          type: string
+        role:
+          type: string
+          enum: [user, admin]
+        status:
+          type: string
+          enum: [active, suspended, banned]
+        itemCount:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+        lastLogin:
+          type: string
+          format: date-time
+
+    Analytics:
+      type: object
+      properties:
+        totalUsers:
+          type: integer
+        totalItems:
+          type: integer
+        openItems:
+          type: integer
+        matchedItems:
+          type: integer
+        claimedItems:
+          type: integer
+        totalMatches:
+          type: integer
+
+        itemsByCategory:
+          type: array
+          items:
+            type: object
+            properties:
+              category:
+                type: string
+              count:
+                type: integer
+
+        itemsByDay:
+          type: array
+          items:
+            type: object
+            properties:
+              date:
+                type: string
+                format: date
+              lost:
+                type: integer
+              found:
+                type: integer
+
+security:
+  - bearerAuth: []
+
+paths:
+
+  /admin/users:
+    get:
+      summary: List all users with pagination
+      description: Returns a paginated list of users with optional filters.
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [active, suspended, banned]
+
+        - name: search
+          in: query
+          schema:
+            type: string
+
+      responses:
+        "200":
+          description: Paginated user list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  users:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/UserAdmin"
+                  total:
+                    type: integer
+
+        "403":
+          description: Admin role required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /admin/users/{id}:
+    get:
+      summary: Get user profile
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+
+      responses:
+        "200":
+          description: User profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserAdmin"
+
+        "404":
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /admin/users/{id}/suspend:
+    post:
+      summary: Suspend user
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason:
+                  type: string
+
+      responses:
+        "200":
+          description: User suspended
+
+        "404":
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /admin/users/{id}/ban:
+    post:
+      summary: Ban user permanently
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+
+      responses:
+        "200":
+          description: User banned
+
+        "404":
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /admin/items:
+    get:
+      summary: Items for moderation
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [open, matched, claimed, closed]
+
+        - name: flagged
+          in: query
+          schema:
+            type: boolean
+
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+
+      responses:
+        "200":
+          description: Items list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      type: object
+                  total:
+                    type: integer
+
+  /admin/items/{id}/remove:
+    post:
+      summary: Remove item (moderation)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason:
+                  type: string
+
+      responses:
+        "200":
+          description: Item removed
+
+        "404":
+          description: Item not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /admin/claims:
+    get:
+      summary: List claims
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [pending, approved, rejected]
+
+      responses:
+        "200":
+          description: Claims list
+          content:
+            application/json:
+              schema:
+                type: object
+
+  /admin/claims/{id}/approve:
+    post:
+      summary: Approve claim
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+
+      responses:
+        "200":
+          description: Claim approved
+
+        "404":
+          description: Claim not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /admin/claims/{id}/reject:
+    post:
+      summary: Reject claim
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason:
+                  type: string
+
+      responses:
+        "200":
+          description: Claim rejected
+
+        "404":
+          description: Claim not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /admin/analytics:
+    get:
+      summary: Dashboard analytics
+
+      responses:
+        "200":
+          description: Analytics data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Analytics"
+
+  /health:
+    get:
+      summary: Health check
+      security: []
+
+      responses:
+        "200":
+          description: Service healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok

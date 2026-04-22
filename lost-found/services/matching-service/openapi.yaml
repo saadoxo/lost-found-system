@@ -1,0 +1,82 @@
+openapi: "3.0.3"
+info:
+  title: Matching Service API
+  version: "1.0.0"
+  description: >
+    Runs as an SQS consumer — no public user-facing endpoints.
+    Exposes only internal admin/debug endpoints and health checks.
+    Triggered by item_created events from SQS, publishes match_found to another queue.
+
+components:
+  schemas:
+    Match:
+      type: object
+      properties:
+        id:           { type: integer }
+        lostItemId:   { type: integer }
+        foundItemId:  { type: integer }
+        score:        { type: number, description: Match confidence 0.0–1.0 }
+        matchedOn:    { type: array, items: { type: string }, description: "Fields that matched e.g. [category, location]" }
+        createdAt:    { type: string, format: date-time }
+        status:       { type: string, enum: [pending, notified, accepted, rejected] }
+
+paths:
+  /matches/{itemId}:
+    get:
+      summary: Get all matches for a specific item (internal use only)
+      parameters:
+        - name: itemId
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: All matches for this item sorted by score
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  matches:
+                    type: array
+                    items: { $ref: "#/components/schemas/Match" }
+        "404": { description: Item not found }
+
+  /matches/trigger:
+    post:
+      summary: Manually trigger matching for an item (admin/debug only)
+      description: >
+        Normally matching is triggered automatically via SQS.
+        This endpoint lets admins manually rerun matching for a specific item.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [itemId]
+              properties:
+                itemId: { type: integer }
+      responses:
+        "200":
+          description: Matching triggered — results will appear asynchronously
+        "404": { description: Item not found }
+
+  /health:
+    get:
+      summary: Health check
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                properties:
+                  status:    { type: string, example: ok }
+                  queueDepth: { type: integer, description: Approximate number of messages in SQS queue }
+
+  /ready:
+    get:
+      summary: Readiness — confirms SQS connectivity and DB connection
+      responses:
+        "200": { description: Ready }
+        "503": { description: Not ready }
