@@ -1,0 +1,219 @@
+openapi: "3.0.3"
+info:
+  title: Item Service API
+  version: "1.0.0"
+  description: CRUD for lost and found item reports. Publishes item_created events to SQS on creation.
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    Error:
+      type: object
+      properties:
+        error: { type: string }
+
+    Item:
+      type: object
+      description: A lost or found item report submitted by a user.
+      properties:
+        id:          { type: integer, description: Unique item ID }
+        type:        { type: string, enum: [lost, found], description: Whether the item was lost or found }
+        title:       { type: string, description: Short descriptive title of the item }
+        description: { type: string, description: Detailed description to help with identification }
+        category:    { type: string, enum: [electronics, clothing, documents, keys, pets, bags, jewellery, other], description: Item category }
+        location:    { type: string, description: Location where the item was lost or found }
+        date:        { type: string, format: date, description: Date the item was lost or found }
+        imageUrl:    { type: string, format: uri, description: Public URL of the uploaded item image }
+        status:      { type: string, enum: [open, matched, claimed, closed], description: Current status of the item report }
+        userId:      { type: integer, description: ID of the user who submitted this report }
+        createdAt:   { type: string, format: date-time, description: Timestamp when the report was created }
+
+    ItemInput:
+      type: object
+      description: Request body for creating or updating an item report.
+      required: [type, title, category, location, date]
+      properties:
+        type:        { type: string, enum: [lost, found], description: Whether the item was lost or found }
+        title:       { type: string, minLength: 3, maxLength: 200, description: Short title for the item }
+        description: { type: string, maxLength: 2000, description: Detailed description to help with identification }
+        category:    { type: string, enum: [electronics, clothing, documents, keys, pets, bags, jewellery, other], description: Item category }
+        location:    { type: string, maxLength: 300, description: Location where the item was lost or found }
+        date:        { type: string, format: date, description: Date the item was lost or found (YYYY-MM-DD) }
+        imageKey:    { type: string, description: S3 object key returned by Image Service after a successful upload }
+
+paths:
+  /items:
+    get:
+      summary: List items with optional filters
+      description: Returns a paginated list of item reports. All filters are optional and can be combined.
+      parameters:
+        - name: type
+          in: query
+          description: Filter to only lost or only found items
+          schema: { type: string, enum: [lost, found] }
+        - name: category
+          in: query
+          description: Filter by item category
+          schema: { type: string }
+        - name: location
+          in: query
+          description: Filter by location (partial match)
+          schema: { type: string }
+        - name: dateFrom
+          in: query
+          description: Return items reported on or after this date (YYYY-MM-DD)
+          schema: { type: string, format: date }
+        - name: dateTo
+          in: query
+          description: Return items reported on or before this date (YYYY-MM-DD)
+          schema: { type: string, format: date }
+        - name: page
+          in: query
+          description: Page number for pagination (1-based)
+          schema: { type: integer, default: 1 }
+        - name: limit
+          in: query
+          description: Number of results per page (maximum 100)
+          schema: { type: integer, default: 20, maximum: 100 }
+      responses:
+        "200":
+          description: Paginated list of item reports
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/Item" }
+                  total:    { type: integer, description: Total number of matching items }
+                  page:     { type: integer, description: Current page number }
+                  pages:    { type: integer, description: Total number of pages }
+
+    post:
+      summary: Report a new lost or found item
+      description: Creates a new item report. After saving, publishes an item_created event to SQS to trigger the matching pipeline.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ItemInput" }
+      responses:
+        "201":
+          description: Item report created — item_created event published to SQS
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Item" }
+        "401": { description: Not authenticated — valid JWT required }
+        "422": { description: Validation failed — check required fields and formats }
+
+  /items/{id}:
+    get:
+      summary: Get a single item by ID
+      description: Returns the full details of one item report.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: The item ID
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Item found
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Item" }
+        "404":
+          description: No item found with that ID
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+    put:
+      summary: Update an item report
+      description: Updates a report. Only the user who created the item can update it.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: The item ID to update
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ItemInput" }
+      responses:
+        "200":
+          description: Item updated successfully
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Item" }
+        "403": { description: Forbidden — you are not the owner of this item }
+        "404": { description: Item not found }
+
+    delete:
+      summary: Delete an item report
+      description: Permanently deletes an item report. Only the owner or an admin can delete.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: The item ID to delete
+          schema: { type: integer }
+      responses:
+        "204": { description: Item deleted successfully }
+        "403": { description: Forbidden — you are not the owner or an admin }
+        "404": { description: Item not found }
+
+  /items/{id}/claim:
+    post:
+      summary: Initiate a claim on a found item
+      description: Submits a claim request for a found item. The claim is held as pending until an admin approves or rejects it.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: The ID of the found item you are claiming
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [message]
+              properties:
+                message:
+                  type: string
+                  maxLength: 1000
+                  description: A message to the admin explaining why this item belongs to you
+      responses:
+        "200": { description: Claim submitted — pending admin approval }
+        "409": { description: You already have an active claim on this item }
+
+  /health:
+    get:
+      summary: Health check
+      description: Returns service health status. No authentication required.
+      responses:
+        "200":
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                properties:
+                  status: { type: string, example: ok }

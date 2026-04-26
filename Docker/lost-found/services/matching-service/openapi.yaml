@@ -1,0 +1,102 @@
+openapi: "3.0.3"
+info:
+  title: Matching Service API
+  version: "1.0.0"
+  description: >
+    Runs as an SQS consumer — no public user-facing endpoints.
+    Exposes only internal admin/debug endpoints and health checks.
+    Triggered by item_created events from SQS, publishes match_found to another queue.
+
+components:
+  schemas:
+    Match:
+      type: object
+      description: A potential match between a lost item and a found item.
+      properties:
+        id:           { type: integer, description: Unique match ID }
+        lostItemId:   { type: integer, description: ID of the lost item }
+        foundItemId:  { type: integer, description: ID of the found item }
+        score:        { type: number, description: Match confidence score between 0.0 and 1.0 }
+        matchedOn:
+          type: array
+          description: List of fields that contributed to the match (e.g. category, location, date)
+          items: { type: string }
+        createdAt:    { type: string, format: date-time, description: When the match was computed }
+        status:       { type: string, enum: [pending, notified, accepted, rejected], description: Current state of the match }
+
+paths:
+  /matches/{itemId}:
+    get:
+      summary: Get all matches for a specific item
+      description: Returns all computed matches for a given item ID, sorted by score descending. Internal use only.
+      parameters:
+        - name: itemId
+          in: path
+          required: true
+          description: The item ID to retrieve matches for
+          schema: { type: integer }
+      responses:
+        "200":
+          description: All matches for this item sorted by confidence score
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  matches:
+                    type: array
+                    items: { $ref: "#/components/schemas/Match" }
+        "404":
+          description: Item not found
+
+  /matches/trigger:
+    post:
+      summary: Manually trigger matching for an item
+      description: >
+        Normally matching is triggered automatically when an item_created event
+        arrives via SQS. Use this endpoint to manually rerun matching for a specific
+        item — useful for debugging or reprocessing after a service outage.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [itemId]
+              properties:
+                itemId:
+                  type: integer
+                  description: ID of the item to run matching for
+      responses:
+        "200":
+          description: Matching triggered — results will be published to SQS asynchronously
+        "404":
+          description: Item not found
+
+  /health:
+    get:
+      summary: Health check
+      description: Returns service health and current SQS queue depth.
+      responses:
+        "200":
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                properties:
+                  status:
+                    type: string
+                    example: ok
+                  queueDepth:
+                    type: integer
+                    description: Approximate number of unprocessed messages in the SQS queue
+
+  /ready:
+    get:
+      summary: Readiness check
+      description: Confirms SQS connectivity and PostgreSQL connection before accepting traffic.
+      responses:
+        "200":
+          description: Service is ready
+        "503":
+          description: Not ready — SQS or database unreachable

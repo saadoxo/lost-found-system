@@ -13,16 +13,17 @@ components:
 
     SearchResult:
       type: object
+      description: A single item returned from an OpenSearch query, with a relevance score.
       properties:
-        id:          { type: integer }
-        type:        { type: string, enum: [lost, found] }
-        title:       { type: string }
-        description: { type: string }
-        category:    { type: string }
-        location:    { type: string }
-        date:        { type: string, format: date }
-        imageUrl:    { type: string }
-        score:       { type: number, description: Relevance score from OpenSearch }
+        id:          { type: integer, description: Item ID }
+        type:        { type: string, enum: [lost, found], description: Whether this is a lost or found report }
+        title:       { type: string, description: Item title }
+        description: { type: string, description: Item description }
+        category:    { type: string, description: Item category }
+        location:    { type: string, description: Location where the item was lost or found }
+        date:        { type: string, format: date, description: Date the item was lost or found }
+        imageUrl:    { type: string, description: URL of the item image in S3 }
+        score:       { type: number, description: Relevance score from OpenSearch — higher means more relevant }
 
 paths:
   /search:
@@ -35,29 +36,35 @@ paths:
         - name: q
           in: query
           required: true
-          description: Search query string
+          description: The search query string (minimum 2 characters)
           schema: { type: string, minLength: 2, example: "black leather wallet" }
         - name: type
           in: query
+          description: Filter results to only lost items or only found items
           schema: { type: string, enum: [lost, found] }
         - name: category
           in: query
+          description: Filter by item category
           schema: { type: string }
         - name: location
           in: query
-          description: Partial location match
+          description: Filter by location (partial match)
           schema: { type: string }
         - name: dateFrom
           in: query
+          description: Return items reported on or after this date (YYYY-MM-DD)
           schema: { type: string, format: date }
         - name: dateTo
           in: query
+          description: Return items reported on or before this date (YYYY-MM-DD)
           schema: { type: string, format: date }
         - name: page
           in: query
+          description: Page number for pagination (1-based)
           schema: { type: integer, default: 1 }
         - name: limit
           in: query
+          description: Number of results per page (max 50)
           schema: { type: integer, default: 20, maximum: 50 }
       responses:
         "200":
@@ -70,27 +77,29 @@ paths:
                   results:
                     type: array
                     items: { $ref: "#/components/schemas/SearchResult" }
-                  total:    { type: integer }
-                  page:     { type: integer }
-                  pages:    { type: integer }
-                  query:    { type: string }
+                  total:    { type: integer, description: Total number of matching items }
+                  page:     { type: integer, description: Current page number }
+                  pages:    { type: integer, description: Total number of pages }
+                  query:    { type: string, description: The search query that was executed }
         "400":
-          description: Query too short or invalid
+          description: Query too short or invalid parameters
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
 
   /search/suggest:
     get:
-      summary: Autocomplete suggestions as user types
+      summary: Autocomplete suggestions as the user types
+      description: Returns up to 5 suggested completions based on the partial query. Useful for search-as-you-type UI.
       parameters:
         - name: q
           in: query
           required: true
+          description: Partial search query (minimum 2 characters)
           schema: { type: string, minLength: 2 }
       responses:
         "200":
-          description: List of suggested completions
+          description: List of suggested search completions
           content:
             application/json:
               schema:
@@ -98,14 +107,17 @@ paths:
                 properties:
                   suggestions:
                     type: array
+                    description: Up to 5 autocomplete suggestions
                     items: { type: string }
                     example: ["black wallet", "black bag", "black phone"]
 
   /health:
     get:
       summary: Health check
+      description: Returns service health status. No authentication required.
       responses:
         "200":
+          description: Service is healthy
           content:
             application/json:
               schema:

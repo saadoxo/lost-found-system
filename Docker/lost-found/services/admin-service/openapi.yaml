@@ -54,20 +54,32 @@ components:
               lost:  { type: integer }
               found: { type: integer }
 
-# All routes require admin JWT — apply globally
 security:
   - bearerAuth: []
 
 paths:
-  # ── Users ─────────────────────────────────────────────────────────────────
+
   /admin/users:
     get:
       summary: List all users with pagination
+      description: Returns a paginated list of all registered users. Supports filtering by status and searching by name or email.
       parameters:
-        - name: page   { in: query, schema: { type: integer, default: 1 } }
-        - name: limit  { in: query, schema: { type: integer, default: 50 } }
-        - name: status { in: query, schema: { type: string, enum: [active, suspended, banned] } }
-        - name: search { in: query, schema: { type: string }, description: Search by name or email }
+        - name: page
+          in: query
+          description: Page number (1-based)
+          schema: { type: integer, default: 1 }
+        - name: limit
+          in: query
+          description: Number of results per page
+          schema: { type: integer, default: 50 }
+        - name: status
+          in: query
+          description: Filter users by account status
+          schema: { type: string, enum: [active, suspended, banned] }
+        - name: search
+          in: query
+          description: Search by name or email (partial match)
+          schema: { type: string }
       responses:
         "200":
           description: Paginated user list
@@ -84,13 +96,16 @@ paths:
   /admin/users/{id}:
     get:
       summary: Get detailed user profile
+      description: Returns full profile for a single user including item count and last login.
       parameters:
         - name: id
           in: path
           required: true
+          description: User ID
           schema: { type: integer }
       responses:
         "200":
+          description: User profile
           content:
             application/json:
               schema: { $ref: "#/components/schemas/UserAdmin" }
@@ -99,17 +114,19 @@ paths:
   /admin/users/{id}/suspend:
     post:
       summary: Suspend a user account
+      description: Temporarily suspends the user — they cannot log in until reinstated.
       parameters:
         - name: id
           in: path
           required: true
+          description: User ID
           schema: { type: integer }
       requestBody:
         content:
           application/json:
             schema:
               properties:
-                reason: { type: string }
+                reason: { type: string, description: Internal reason for suspension }
       responses:
         "200": { description: User suspended }
         "404": { description: User not found }
@@ -117,22 +134,34 @@ paths:
   /admin/users/{id}/ban:
     post:
       summary: Permanently ban a user
+      description: Permanently bans the user. Cannot be reversed via the API — requires DB intervention.
       parameters:
         - name: id
           in: path
           required: true
+          description: User ID
           schema: { type: integer }
       responses:
         "200": { description: User banned }
+        "404": { description: User not found }
 
-  # ── Items Moderation ───────────────────────────────────────────────────────
   /admin/items:
     get:
       summary: List all items for moderation
+      description: Returns items for admin review. Use the flagged filter to see only reported items.
       parameters:
-        - name: status   { in: query, schema: { type: string } }
-        - name: flagged  { in: query, schema: { type: boolean }, description: Show only flagged items }
-        - name: page     { in: query, schema: { type: integer, default: 1 } }
+        - name: status
+          in: query
+          description: Filter by item status
+          schema: { type: string, enum: [open, matched, claimed, closed] }
+        - name: flagged
+          in: query
+          description: If true, return only items flagged by users for review
+          schema: { type: boolean }
+        - name: page
+          in: query
+          description: Page number
+          schema: { type: integer, default: 1 }
       responses:
         "200":
           description: Items for moderation
@@ -146,62 +175,74 @@ paths:
   /admin/items/{id}/remove:
     post:
       summary: Remove an item (moderator action)
+      description: Removes a reported item from public view. The item record is retained in the DB for audit purposes.
       parameters:
         - name: id
           in: path
           required: true
+          description: Item ID
           schema: { type: integer }
       requestBody:
         content:
           application/json:
             schema:
               properties:
-                reason: { type: string }
+                reason: { type: string, description: Reason for removal (stored in audit log) }
       responses:
         "200": { description: Item removed }
+        "404": { description: Item not found }
 
-  # ── Claims ─────────────────────────────────────────────────────────────────
   /admin/claims:
     get:
-      summary: List all pending claims
+      summary: List all claims
+      description: Returns claims filtered by status. Defaults to showing pending claims awaiting admin decision.
       parameters:
-        - name: status { in: query, schema: { type: string, enum: [pending, approved, rejected] } }
+        - name: status
+          in: query
+          description: Filter claims by status
+          schema: { type: string, enum: [pending, approved, rejected] }
       responses:
         "200":
           description: Claims list
 
   /admin/claims/{id}/approve:
     post:
-      summary: Approve a claim — triggers notification to both users
+      summary: Approve a claim
+      description: Approves the claim and triggers email notifications to both the claimer and item owner.
       parameters:
         - name: id
           in: path
           required: true
+          description: Claim ID
           schema: { type: integer }
       responses:
         "200": { description: Claim approved — notifications sent }
+        "404": { description: Claim not found }
 
   /admin/claims/{id}/reject:
     post:
       summary: Reject a claim
+      description: Rejects the claim. The rejection reason is sent to the claimer via notification.
       parameters:
         - name: id
           in: path
           required: true
+          description: Claim ID
           schema: { type: integer }
       requestBody:
         content:
           application/json:
             schema:
               properties:
-                reason: { type: string }
+                reason: { type: string, description: Reason shown to the user whose claim was rejected }
       responses:
         "200": { description: Claim rejected }
+        "404": { description: Claim not found }
 
-  # ── Analytics ──────────────────────────────────────────────────────────────
   /admin/analytics:
     get:
-      summary: Dashboard analytics — item counts, match rates, category breakdown
+      summary: Dashboard analytics
+      description: Returns aggregate counts and breakdowns used to populate the admin dashboard.
       responses:
         "200":
           description: Analytics data
@@ -212,9 +253,11 @@ paths:
   /health:
     get:
       summary: Health check
-      security: []   # No auth required for health checks
+      description: Returns service health status. No authentication required.
+      security: []
       responses:
         "200":
+          description: Service is healthy
           content:
             application/json:
               schema:
