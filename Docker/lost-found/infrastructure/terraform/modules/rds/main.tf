@@ -1,7 +1,7 @@
 # Security Group — only ECS nodes can reach the DB
 resource "aws_security_group" "rds" {
   name        = "${var.project}-rds-sg-${var.environment}"
-  description = "RDS PostgreSQL — accept connections from ECS nodes only"
+  description = "RDS PostgreSQL - accept connections from ECS nodes only"
   vpc_id      = var.vpc_id
 
   ingress {

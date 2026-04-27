@@ -1,6 +1,6 @@
 resource "aws_security_group" "redis" {
   name        = "${var.project}-redis-sg-${var.environment}"
-  description = "ElastiCache Redis — accept from ECS nodes only"
+  description = "ElastiCache Redis - accept from ECS nodes only"
   vpc_id      = var.vpc_id
 
   ingress {

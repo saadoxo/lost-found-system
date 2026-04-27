@@ -11,7 +11,7 @@ data "aws_ami" "ecs_optimized" {
 # Security Group for ECS EC2 nodes
 resource "aws_security_group" "ecs_node" {
   name        = "${var.project}-ecs-node-sg-${var.environment}"
-  description = "ECS EC2 node — accepts traffic from ALB only"
+  description = "ECS EC2 node - accepts traffic from ALB only"
   vpc_id      = var.vpc_id
 
   # Accept traffic from ALB on all ports (ALB forwards to dynamic host ports)
