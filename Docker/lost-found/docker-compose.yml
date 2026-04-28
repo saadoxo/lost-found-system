@@ -67,8 +67,16 @@ services:
     ports:
       - "3003:3003"
     environment:
-      PORT:     3003
-      NODE_ENV: development
+      PORT:        3003
+      DB_HOST:     postgres
+      DB_PORT:     5432
+      DB_NAME:     lostfound
+      DB_USER:     lostfound
+      DB_PASSWORD: localdev123
+      NODE_ENV:    development
+    depends_on:
+      postgres:
+        condition: service_healthy
 
   matching-service:
     build: ./services/matching-service
