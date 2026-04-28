@@ -39,7 +39,7 @@ resource "aws_db_parameter_group" "postgres" {
 resource "aws_db_instance" "primary" {
   identifier              = "${var.project}-postgres-${var.environment}"
   engine                  = "postgres"
-  engine_version          = "15.4"
+  engine_version          = "15"
   instance_class          = "db.t3.medium"
   allocated_storage       = 20
   max_allocated_storage   = 100

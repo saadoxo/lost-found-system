@@ -1,8 +1,4 @@
-version: "3.9"
-
 services:
-
-  # ── Infrastructure ───────────────────────────────────────────────────────────
 
   postgres:
     image: postgres:15-alpine
@@ -30,8 +26,6 @@ services:
       timeout: 3s
       retries: 5
 
-  # ── Application Services ─────────────────────────────────────────────────────
-
   auth-service:
     build: ./services/auth-service
     ports:
@@ -55,13 +49,15 @@ services:
     ports:
       - "3002:3002"
     environment:
-      PORT:        3002
-      DB_HOST:     postgres
-      DB_PORT:     5432
-      DB_NAME:     lostfound
-      DB_USER:     lostfound
-      DB_PASSWORD: localdev123
-      NODE_ENV:    development
+      PORT:               3002
+      DB_HOST:            postgres
+      DB_PORT:            5432
+      DB_NAME:            lostfound
+      DB_USER:            lostfound
+      DB_PASSWORD:        localdev123
+      JWT_ACCESS_SECRET:  local-access-secret-change-in-prod
+      JWT_REFRESH_SECRET: local-refresh-secret-change-in-prod
+      NODE_ENV:           development
     depends_on:
       postgres:
         condition: service_healthy
