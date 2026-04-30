@@ -1,3 +1,4 @@
+data "aws_caller_identity" "current" {}
 # ── VPC ───────────────────────────────────────────────────────────────────────
 module "vpc" {
   source = "../../modules/vpc"
@@ -83,4 +84,22 @@ module "alb" {
   vpc_id             = module.vpc.vpc_id
   public_subnet_ids  = module.vpc.public_subnet_ids
   common_tags        = local.common_tags
+}
+# ── ECS Services ──────────────────────────────────────────────────────────────
+module "ecs_services" {
+  source = "../../modules/ecs-services"
+
+  project                 = var.project
+  environment             = var.environment
+  aws_region              = var.aws_region
+  vpc_id                  = module.vpc.vpc_id
+  ecr_registry            = "${data.aws_caller_identity.current.account_id}.dkr.ecr.${var.aws_region}.amazonaws.com"
+  ecs_cluster_arn         = module.ecs.cluster_arn
+  capacity_provider_name  = "${var.project}-cp-${var.environment}"
+  task_role_arn           = module.iam.ecs_task_role_arn
+  task_execution_role_arn = module.iam.ecs_task_execution_role_arn
+  http_listener_arn       = module.alb.http_listener_arn
+  db_host                 = module.rds.db_endpoint
+  secrets_arn_prefix      = "arn:aws:secretsmanager:${var.aws_region}:${data.aws_caller_identity.current.account_id}:secret:lostfound"
+  common_tags             = local.common_tags
 }

@@ -39,3 +39,11 @@ output "images_bucket_name" {
   description = "S3 bucket for item images"
   value       = module.s3.images_bucket_name
 }
+
+output "auth_service_name" {
+  value = module.ecs_services.auth_service_name
+}
+
+output "log_group_name" {
+  value = module.ecs_services.log_group_name
+}
