@@ -171,7 +171,7 @@ resource "aws_lb_listener_rule" "auth" {
   }
 
   condition {
-    path_pattern { values = ["/auth/*"] }
+    path_pattern { values = ["/auth", "/auth/*"] }
   }
 }
 
@@ -185,7 +185,7 @@ resource "aws_lb_listener_rule" "item" {
   }
 
   condition {
-    path_pattern { values = ["/items/*"] }
+    path_pattern { values = ["/items", "/items/*"] }
   }
 }
 
