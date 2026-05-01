@@ -23,7 +23,7 @@ resource "aws_ecs_task_definition" "auth" {
 
     environment = [
       { name = "PORT",     value = "3001" },
-      { name = "NODE_ENV", value = var.environment },
+      { name = "NODE_ENV", value = "production" },
       { name = "DB_HOST", value = replace(var.db_host, ":5432", "") },
       { name = "DB_PORT",  value = "5432" },
       { name = "DB_NAME",  value = "lostfound" },
@@ -82,7 +82,7 @@ resource "aws_ecs_task_definition" "item" {
 
     environment = [
       { name = "PORT",     value = "3002" },
-      { name = "NODE_ENV", value = var.environment },
+      { name = "NODE_ENV", value = "production" },
       { name = "DB_HOST", value = replace(var.db_host, ":5432", "") },
       { name = "DB_PORT",  value = "5432" },
       { name = "DB_NAME",  value = "lostfound" },
