@@ -101,5 +101,6 @@ module "ecs_services" {
   http_listener_arn       = module.alb.http_listener_arn
   db_host                 = module.rds.db_endpoint
   secrets_arn_prefix      = "arn:aws:secretsmanager:${var.aws_region}:${data.aws_caller_identity.current.account_id}:secret:lostfound"
+  images_bucket_name      = module.s3.images_bucket_name
   common_tags             = local.common_tags
 }

@@ -11,3 +11,4 @@ variable "http_listener_arn"      { type = string }
 variable "db_host"                { type = string }
 variable "secrets_arn_prefix"     { type = string }
 variable "common_tags"            { type = map(string) }
+variable "images_bucket_name" { type = string }
