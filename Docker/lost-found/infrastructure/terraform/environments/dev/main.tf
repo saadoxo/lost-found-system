@@ -103,4 +103,13 @@ module "ecs_services" {
   secrets_arn_prefix      = "arn:aws:secretsmanager:${var.aws_region}:${data.aws_caller_identity.current.account_id}:secret:lostfound"
   images_bucket_name      = module.s3.images_bucket_name
   common_tags             = local.common_tags
+  item_created_queue_url  = module.sqs.item_created_queue_url
+  match_found_queue_url   = module.sqs.match_found_queue_url
+}
+# ── SQS ───────────────────────────────────────────────────────────────────────
+module "sqs" {
+  source      = "../../modules/sqs"
+  project     = var.project
+  environment = var.environment
+  common_tags = local.common_tags
 }

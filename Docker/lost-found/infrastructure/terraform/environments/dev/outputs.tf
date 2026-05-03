@@ -47,3 +47,10 @@ output "auth_service_name" {
 output "log_group_name" {
   value = module.ecs_services.log_group_name
 }
+
+output "item_created_queue_url" {
+  value = module.sqs.item_created_queue_url
+}
+output "match_found_queue_url" {
+  value = module.sqs.match_found_queue_url
+}

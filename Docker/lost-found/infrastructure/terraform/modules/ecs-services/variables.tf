@@ -12,3 +12,5 @@ variable "db_host"                { type = string }
 variable "secrets_arn_prefix"     { type = string }
 variable "common_tags"            { type = map(string) }
 variable "images_bucket_name" { type = string }
+variable "item_created_queue_url" { type = string }
+variable "match_found_queue_url"  { type = string }
