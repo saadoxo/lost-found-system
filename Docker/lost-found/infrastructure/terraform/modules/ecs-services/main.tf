@@ -472,17 +472,28 @@ resource "aws_ecs_service" "auth" {
   cluster         = var.ecs_cluster_arn
   task_definition = aws_ecs_task_definition.auth.arn
   desired_count   = 1
+
   capacity_provider_strategy {
     capacity_provider = var.capacity_provider_name
     weight            = 1
   }
+
+  deployment_controller {
+    type = "CODE_DEPLOY"
+  }
+
   load_balancer {
     target_group_arn = aws_lb_target_group.auth.arn
     container_name   = "auth-service"
     container_port   = 3001
   }
+
   depends_on = [aws_lb_listener_rule.auth]
-  tags = var.common_tags
+  tags       = var.common_tags
+
+  lifecycle {
+    ignore_changes = [task_definition, load_balancer]
+  }
 }
 
 resource "aws_ecs_service" "item" {

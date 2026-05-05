@@ -113,3 +113,16 @@ module "sqs" {
   environment = var.environment
   common_tags = local.common_tags
 }
+# ── CodeDeploy Blue/Green ─────────────────────────────────────────────────────
+module "codedeploy" {
+  source = "../../modules/codedeploy"
+
+  project           = var.project
+  environment       = var.environment
+  vpc_id            = module.vpc.vpc_id
+  ecs_cluster_name  = module.ecs.cluster_name
+  auth_service_name = module.ecs_services.auth_service_name
+  auth_tg_name      = "lostfound-auth-tg-dev"
+  http_listener_arn = module.alb.http_listener_arn
+  common_tags       = local.common_tags
+}
