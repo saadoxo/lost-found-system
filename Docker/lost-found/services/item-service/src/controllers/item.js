@@ -114,3 +114,78 @@ exports.deleteItem = async (req, res) => {
     res.status(500).json({ error: 'Failed to delete item' });
   }
 };
+
+exports.claimItem = async (req, res) => {
+  const { id } = req.params;
+  const userId  = req.user.sub;
+  const { message } = req.body;
+
+  try {
+    const item = await db.query('SELECT * FROM items WHERE id = $1', [id]);
+    if (!item.rows.length) return res.status(404).json({ error: 'Item not found' });
+    if (item.rows[0].status !== 'open') return res.status(400).json({ error: 'Item is not available for claiming' });
+    if (item.rows[0].user_id === userId) return res.status(400).json({ error: 'Cannot claim your own item' });
+
+    const claim = await db.query(
+      `INSERT INTO claims (item_id, claimant_id, message, status, created_at, updated_at)
+       VALUES ($1, $2, $3, 'pending', NOW(), NOW()) RETURNING *`,
+      [id, userId, message || null]
+    );
+
+    console.log(JSON.stringify({ level: 'info', event: 'claim_created', itemId: id, userId }));
+    res.status(201).json(claim.rows[0]);
+  } catch (err) {
+    console.error(JSON.stringify({ level: 'error', event: 'claim_error', error: err.message }));
+    res.status(500).json({ error: 'Failed to create claim' });
+  }
+};
+
+exports.getClaims = async (req, res) => {
+  const { id } = req.params;
+  const userId  = req.user.sub;
+  const role    = req.user.role;
+
+  try {
+    const item = await db.query('SELECT * FROM items WHERE id = $1', [id]);
+    if (!item.rows.length) return res.status(404).json({ error: 'Item not found' });
+    if (item.rows[0].user_id !== userId && role !== 'admin') {
+      return res.status(403).json({ error: 'Not authorized to view claims' });
+    }
+    const claims = await db.query(
+      'SELECT * FROM claims WHERE item_id = $1 ORDER BY created_at DESC', [id]
+    );
+    res.json({ claims: claims.rows, total: claims.rows.length });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch claims' });
+  }
+};
+
+exports.approveClaim = async (req, res) => {
+  const { id, claimId } = req.params;
+  const userId = req.user.sub;
+  const role   = req.user.role;
+
+  try {
+    const item = await db.query('SELECT * FROM items WHERE id = $1', [id]);
+    if (!item.rows.length) return res.status(404).json({ error: 'Item not found' });
+    if (item.rows[0].user_id !== userId && role !== 'admin') {
+      return res.status(403).json({ error: 'Not authorized' });
+    }
+
+    await db.query(
+      `UPDATE claims SET status = 'approved', updated_at = NOW() WHERE id = $1`, [claimId]
+    );
+    await db.query(
+      `UPDATE items SET status = 'matched', updated_at = NOW() WHERE id = $1`, [id]
+    );
+    await db.query(
+      `UPDATE claims SET status = 'rejected', updated_at = NOW() WHERE id != $1 AND item_id = $2`,
+      [claimId, id]
+    );
+
+    console.log(JSON.stringify({ level: 'info', event: 'claim_approved', itemId: id, claimId }));
+    res.json({ message: 'Claim approved, item marked as matched' });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to approve claim' });
+  }
+};
