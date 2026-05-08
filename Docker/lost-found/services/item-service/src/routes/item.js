@@ -14,4 +14,8 @@ router.post('/',    authMiddleware, validate(createItemSchema), controller.creat
 router.put('/:id',  authMiddleware, validate(updateItemSchema), controller.updateItem);
 router.delete('/:id', authMiddleware, controller.deleteItem);
 
+router.post('/:id/claims',                 authMiddleware, controller.claimItem);
+router.get('/:id/claims',                  authMiddleware, controller.getClaims);
+router.put('/:id/claims/:claimId/approve', authMiddleware, controller.approveClaim);
+
 module.exports = router;
