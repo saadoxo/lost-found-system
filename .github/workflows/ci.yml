@@ -9,6 +9,7 @@ on:
 env:
   AWS_REGION:   us-east-1
   ECR_REGISTRY: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-east-1.amazonaws.com
+  ECS_CLUSTER:  lostfound-cluster-dev
 
 jobs:
 
@@ -126,3 +127,63 @@ jobs:
         env:
           TF_VAR_db_password: ${{ secrets.DB_PASSWORD }}
         run: terraform plan -no-color
+
+  deploy:
+    name: Deploy to ECS
+    runs-on: ubuntu-latest
+    # Wait for images to be built and security scan to pass before deploying
+    needs: [build-and-push, security-scan]
+    if: github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id:     ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region:            ${{ env.AWS_REGION }}
+
+      # Force each ECS service to pull the new :latest image.
+      # auth-service uses CodeDeploy blue/green — skip it here, CodeDeploy handles it.
+      - name: Deploy item-service
+        run: aws ecs update-service --cluster $ECS_CLUSTER --service lostfound-item-service-dev --force-new-deployment --region $AWS_REGION
+
+      - name: Deploy search-service
+        run: aws ecs update-service --cluster $ECS_CLUSTER --service lostfound-search-service-dev --force-new-deployment --region $AWS_REGION
+
+      - name: Deploy matching-service
+        run: aws ecs update-service --cluster $ECS_CLUSTER --service lostfound-matching-service-dev --force-new-deployment --region $AWS_REGION
+
+      - name: Deploy notification-service
+        run: aws ecs update-service --cluster $ECS_CLUSTER --service lostfound-notification-service-dev --force-new-deployment --region $AWS_REGION
+
+      - name: Deploy image-service
+        run: aws ecs update-service --cluster $ECS_CLUSTER --service lostfound-image-service-dev --force-new-deployment --region $AWS_REGION
+
+      - name: Deploy admin-service
+        run: aws ecs update-service --cluster $ECS_CLUSTER --service lostfound-admin-service-dev --force-new-deployment --region $AWS_REGION
+
+      # auth-service: trigger CodeDeploy blue/green deployment with the new image
+      - name: Deploy auth-service via CodeDeploy
+        run: |
+          TASK_DEF=$(aws ecs describe-task-definition \
+            --task-definition lostfound-auth-service-dev \
+            --region $AWS_REGION \
+            --query 'taskDefinition.taskDefinitionArn' \
+            --output text)
+
+          aws deploy create-deployment \
+            --application-name lostfound-ecs-dev \
+            --deployment-group-name lostfound-auth-dg-dev \
+            --revision "{\"revisionType\":\"AppSpecContent\",\"appSpecContent\":{\"content\":\"{\\\"version\\\":0,\\\"Resources\\\":[{\\\"TargetService\\\":{\\\"Type\\\":\\\"AWS::ECS::Service\\\",\\\"Properties\\\":{\\\"TaskDefinition\\\":\\\"$TASK_DEF\\\",\\\"LoadBalancerInfo\\\":{\\\"ContainerName\\\":\\\"auth-service\\\",\\\"ContainerPort\\\":3001}}}}]}\"}}" \
+            --region $AWS_REGION
+
+      - name: Smoke test — check ALB health
+        run: |
+          sleep 30
+          curl -sf http://lostfound-alb-dev-1030859096.us-east-1.elb.amazonaws.com/auth/health \
+            && echo "auth-service healthy" \
+            || echo "WARNING: auth-service health check failed"
+          curl -sf http://lostfound-alb-dev-1030859096.us-east-1.elb.amazonaws.com/items/health \
+            && echo "item-service healthy" \
+            || echo "WARNING: item-service health check failed"
