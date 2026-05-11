@@ -126,3 +126,25 @@ module "codedeploy" {
   http_listener_arn = module.alb.http_listener_arn
   common_tags       = local.common_tags
 }
+# ── Internal ALB ──────────────────────────────────────────────────────────────
+module "internal_alb" {
+  source = "../../modules/internal-alb"
+
+  project            = var.project
+  environment        = var.environment
+  vpc_id             = module.vpc.vpc_id
+  private_subnet_ids = module.vpc.private_subnet_ids
+  ecs_node_sg_id     = module.ecs.ecs_node_sg_id
+  common_tags        = local.common_tags
+}
+
+# ── SNS ───────────────────────────────────────────────────────────────────────
+module "sns" {
+  source = "../../modules/sns"
+
+  project               = var.project
+  environment           = var.environment
+  match_found_queue_arn = module.sqs.match_found_queue_arn
+  match_found_queue_url = module.sqs.match_found_queue_url
+  common_tags           = local.common_tags
+}
