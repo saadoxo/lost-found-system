@@ -254,8 +254,15 @@ resource "aws_ecs_task_definition" "matching" {
     environment = [
       { name = "PORT",                   value = "3004" },
       { name = "AWS_REGION",             value = var.aws_region },
+      { name = "DB_HOST",                value = replace(var.db_host, ":5432", "") },
+      { name = "DB_PORT",                value = "5432" },
+      { name = "DB_NAME",                value = "lostfound" },
+      { name = "DB_USER",                value = "lostfound" },
       { name = "ITEM_CREATED_QUEUE_URL", value = var.item_created_queue_url },
       { name = "MATCH_FOUND_QUEUE_URL",  value = var.match_found_queue_url }
+    ]
+    secrets = [
+      { name = "DB_PASSWORD", valueFrom = "${var.secrets_arn_prefix}/db-password" }
     ]
     logConfiguration = {
       logDriver = "awslogs"
@@ -296,7 +303,9 @@ resource "aws_ecs_task_definition" "notification" {
     environment = [
       { name = "PORT",                  value = "3005" },
       { name = "AWS_REGION",            value = var.aws_region },
-      { name = "MATCH_FOUND_QUEUE_URL", value = var.match_found_queue_url }
+      { name = "MATCH_FOUND_QUEUE_URL", value = var.match_found_queue_url },
+      { name = "INTERNAL_ALB_DNS",      value = var.internal_alb_dns },
+      { name = "SENDER_EMAIL",          value = var.sender_email }
     ]
     logConfiguration = {
       logDriver = "awslogs"

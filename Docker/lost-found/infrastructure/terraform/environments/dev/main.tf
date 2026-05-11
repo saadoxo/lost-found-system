@@ -105,6 +105,7 @@ module "ecs_services" {
   common_tags             = local.common_tags
   item_created_queue_url  = module.sqs.item_created_queue_url
   match_found_queue_url   = module.sqs.match_found_queue_url
+  internal_alb_dns        = module.internal_alb.internal_alb_dns
 }
 # ── SQS ───────────────────────────────────────────────────────────────────────
 module "sqs" {

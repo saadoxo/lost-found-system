@@ -84,3 +84,38 @@ resource "aws_iam_role_policy" "task_secrets" {
     }]
   })
 }
+
+# Allow containers to use SQS, SNS, and SES for the async messaging pipeline
+resource "aws_iam_role_policy" "task_messaging" {
+  name = "${var.project}-task-messaging-${var.environment}"
+  role = aws_iam_role.ecs_task.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "SQSAccess"
+        Effect = "Allow"
+        Action = [
+          "sqs:ReceiveMessage",
+          "sqs:DeleteMessage",
+          "sqs:SendMessage",
+          "sqs:GetQueueAttributes"
+        ]
+        Resource = "arn:aws:sqs:*:*:${var.project}-*"
+      },
+      {
+        Sid    = "SNSPublish"
+        Effect = "Allow"
+        Action = ["sns:Publish"]
+        Resource = "arn:aws:sns:*:*:${var.project}-*"
+      },
+      {
+        Sid    = "SESEmail"
+        Effect = "Allow"
+        Action = ["ses:SendEmail", "ses:SendRawEmail"]
+        Resource = "*"
+      }
+    ]
+  })
+}
