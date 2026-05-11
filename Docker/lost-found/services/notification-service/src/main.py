@@ -60,8 +60,8 @@ def send_email(ses, to_address: str, subject: str, body_text: str, body_html: st
 
 def handle_match_found(match_data: dict):
     """
-    Send email to both the lost-item owner and found-item owner
-    when the matching service detects a potential match.
+    Send email to both item owners when a match is detected.
+    Skips silently if email lookup fails (no internal ALB in local dev).
     """
     region = os.environ.get("AWS_REGION", "us-east-1")
     ses = boto3.client("ses", region_name=region)

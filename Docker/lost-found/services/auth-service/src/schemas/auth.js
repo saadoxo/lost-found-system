@@ -1,6 +1,5 @@
 const Joi = require('joi');
 
-// Password must be 12+ chars with upper, lower, number, and special character
 const passwordPolicy = Joi.string()
   .min(12)
   .pattern(/[A-Z]/, 'uppercase letter')
@@ -9,7 +8,7 @@ const passwordPolicy = Joi.string()
   .pattern(/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/, 'special character')
   .required()
   .messages({
-    'string.min': 'Password must be at least 12 characters',
+    'string.min':          'Password must be at least 12 characters',
     'string.pattern.name': 'Password must contain a {#name}'
   });
 

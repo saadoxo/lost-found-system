@@ -23,16 +23,16 @@ app.get('/ready',  async (req, res) => {
   catch { res.status(503).json({ status: 'not ready' }); }
 });
 
-// Analytics dashboard endpoint
 app.get('/admin/analytics', async (req, res) => {
   try {
-    const [users, items, matches] = await Promise.all([
+    const [users, items] = await Promise.all([
       pool.query('SELECT COUNT(*) FROM users'),
-      pool.query(`SELECT COUNT(*) total, COUNT(*) FILTER (WHERE status = 'open') open,
+      pool.query(`SELECT COUNT(*) total,
+                  COUNT(*) FILTER (WHERE status = 'open')    open,
                   COUNT(*) FILTER (WHERE status = 'matched') matched,
-                  COUNT(*) FILTER (WHERE type = 'lost') lost,
-                  COUNT(*) FILTER (WHERE type = 'found') found FROM items`),
-      pool.query('SELECT COUNT(*) FROM items WHERE status = $1', ['matched'])
+                  COUNT(*) FILTER (WHERE type = 'lost')      lost,
+                  COUNT(*) FILTER (WHERE type = 'found')     found
+                  FROM items`)
     ]);
 
     res.json({
@@ -49,7 +49,6 @@ app.get('/admin/analytics', async (req, res) => {
   }
 });
 
-// List all users
 app.get('/admin/users', async (req, res) => {
   try {
     const result = await pool.query(
@@ -61,12 +60,9 @@ app.get('/admin/users', async (req, res) => {
   }
 });
 
-// List all items
 app.get('/admin/items', async (req, res) => {
   try {
-    const result = await pool.query(
-      'SELECT * FROM items ORDER BY created_at DESC LIMIT 100'
-    );
+    const result = await pool.query('SELECT * FROM items ORDER BY created_at DESC LIMIT 100');
     res.json({ items: result.rows, total: result.rows.length });
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch items' });

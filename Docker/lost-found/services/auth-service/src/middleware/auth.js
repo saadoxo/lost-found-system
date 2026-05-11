@@ -12,7 +12,6 @@ module.exports = (req, res, next) => {
   try {
     const decoded = tokenService.verifyAccess(token);
 
-    // Explicitly check token type — prevents a refresh token being used as an access token
     if (decoded.type !== 'access') {
       return res.status(401).json({ error: 'Invalid token type' });
     }

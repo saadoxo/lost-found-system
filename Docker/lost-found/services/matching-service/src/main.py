@@ -38,8 +38,9 @@ def get_db():
 
 def score_match(new_item: dict, candidate: dict) -> float:
     """
-    Score how likely two items are a match. Returns 0.0–1.0.
-    Weights: category (40%), location keyword overlap (35%), date proximity (25%).
+    Score two items on a 0–1 scale.
+    Weights: category exact match (40%), location word overlap (35%), date proximity (25%).
+    Returns 0.0 immediately if categories differ.
     """
     score = 0.0
 
@@ -72,8 +73,8 @@ def score_match(new_item: dict, candidate: dict) -> float:
 
 def find_matches(item: dict) -> list:
     """
-    Query RDS for items of the opposite type in the same category
-    within 30 days. Returns candidates scoring >= 0.5, best first.
+    Query RDS for items of the opposite type in the same category within 30 days.
+    Returns up to 5 candidates scoring >= 0.5, sorted best first.
     """
     opposite = "found" if item.get("type") == "lost" else "lost"
     cutoff = (datetime.utcnow() - timedelta(days=30)).date()
