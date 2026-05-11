@@ -131,7 +131,6 @@ jobs:
   deploy:
     name: Deploy to ECS
     runs-on: ubuntu-latest
-    # Wait for images to be built and security scan to pass before deploying
     needs: [build-and-push, security-scan]
     if: github.ref == 'refs/heads/main'
 
@@ -143,8 +142,7 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region:            ${{ env.AWS_REGION }}
 
-      # Force each ECS service to pull the new :latest image.
-      # auth-service uses CodeDeploy blue/green — skip it here, CodeDeploy handles it.
+      # auth-service is handled separately via CodeDeploy blue/green below
       - name: Deploy item-service
         run: aws ecs update-service --cluster $ECS_CLUSTER --service lostfound-item-service-dev --force-new-deployment --region $AWS_REGION
 
@@ -163,7 +161,6 @@ jobs:
       - name: Deploy admin-service
         run: aws ecs update-service --cluster $ECS_CLUSTER --service lostfound-admin-service-dev --force-new-deployment --region $AWS_REGION
 
-      # auth-service: trigger CodeDeploy blue/green deployment with the new image
       - name: Deploy auth-service via CodeDeploy
         run: |
           TASK_DEF=$(aws ecs describe-task-definition \
@@ -178,7 +175,7 @@ jobs:
             --revision "{\"revisionType\":\"AppSpecContent\",\"appSpecContent\":{\"content\":\"{\\\"version\\\":0,\\\"Resources\\\":[{\\\"TargetService\\\":{\\\"Type\\\":\\\"AWS::ECS::Service\\\",\\\"Properties\\\":{\\\"TaskDefinition\\\":\\\"$TASK_DEF\\\",\\\"LoadBalancerInfo\\\":{\\\"ContainerName\\\":\\\"auth-service\\\",\\\"ContainerPort\\\":3001}}}}]}\"}}" \
             --region $AWS_REGION
 
-      - name: Smoke test — check ALB health
+      - name: Smoke test
         run: |
           sleep 30
           curl -sf http://lostfound-alb-dev-1030859096.us-east-1.elb.amazonaws.com/auth/health \

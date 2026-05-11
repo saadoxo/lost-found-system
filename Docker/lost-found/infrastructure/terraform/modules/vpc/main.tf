@@ -8,7 +8,6 @@ resource "aws_vpc" "main" {
   })
 }
 
-# ── Public Subnets ────────────────────────────────────────────────────────────
 resource "aws_subnet" "public" {
   count                   = length(var.availability_zones)
   vpc_id                  = aws_vpc.main.id
@@ -22,7 +21,6 @@ resource "aws_subnet" "public" {
   })
 }
 
-# ── Private Subnets ───────────────────────────────────────────────────────────
 resource "aws_subnet" "private" {
   count             = length(var.availability_zones)
   vpc_id            = aws_vpc.main.id
@@ -35,7 +33,6 @@ resource "aws_subnet" "private" {
   })
 }
 
-# ── Internet Gateway ──────────────────────────────────────────────────────────
 resource "aws_internet_gateway" "main" {
   vpc_id = aws_vpc.main.id
 
@@ -44,7 +41,6 @@ resource "aws_internet_gateway" "main" {
   })
 }
 
-# ── Elastic IPs for NAT Gateways ──────────────────────────────────────────────
 resource "aws_eip" "nat" {
   count  = length(var.availability_zones)
   domain = "vpc"
@@ -56,7 +52,7 @@ resource "aws_eip" "nat" {
   depends_on = [aws_internet_gateway.main]
 }
 
-# ── NAT Gateways (one per AZ for HA) ─────────────────────────────────────────
+# One NAT gateway per AZ so private subnets stay up if an AZ goes down
 resource "aws_nat_gateway" "main" {
   count         = length(var.availability_zones)
   allocation_id = aws_eip.nat[count.index].id
@@ -69,7 +65,6 @@ resource "aws_nat_gateway" "main" {
   depends_on = [aws_internet_gateway.main]
 }
 
-# ── Public Route Table ────────────────────────────────────────────────────────
 resource "aws_route_table" "public" {
   vpc_id = aws_vpc.main.id
 
@@ -89,7 +84,7 @@ resource "aws_route_table_association" "public" {
   route_table_id = aws_route_table.public.id
 }
 
-# ── Private Route Tables (one per AZ — each points to its local NAT GW) ──────
+# One private route table per AZ, each pointing to its local NAT gateway
 resource "aws_route_table" "private" {
   count  = length(var.availability_zones)
   vpc_id = aws_vpc.main.id

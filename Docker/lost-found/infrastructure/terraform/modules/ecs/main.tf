@@ -8,13 +8,12 @@ data "aws_ami" "ecs_optimized" {
   }
 }
 
-# Security Group for ECS EC2 nodes
 resource "aws_security_group" "ecs_node" {
   name        = "${var.project}-ecs-node-sg-${var.environment}"
   description = "ECS EC2 node - accepts traffic from ALB only"
   vpc_id      = var.vpc_id
 
-  # Accept traffic from ALB on all ports (ALB forwards to dynamic host ports)
+  # ALB uses dynamic host port mapping, so we allow the full ephemeral range
   ingress {
     from_port       = 0
     to_port         = 65535
@@ -36,7 +35,6 @@ resource "aws_security_group" "ecs_node" {
   })
 }
 
-# ECS Cluster
 resource "aws_ecs_cluster" "main" {
   name = "${var.project}-cluster-${var.environment}"
 
@@ -48,7 +46,6 @@ resource "aws_ecs_cluster" "main" {
   tags = var.common_tags
 }
 
-# Capacity provider links the ASG to the ECS cluster
 resource "aws_ecs_cluster_capacity_providers" "main" {
   cluster_name       = aws_ecs_cluster.main.name
   capacity_providers = [aws_ecs_capacity_provider.main.name]
@@ -75,7 +72,6 @@ resource "aws_ecs_capacity_provider" "main" {
   }
 }
 
-# Launch Template for ECS EC2 nodes
 resource "aws_launch_template" "ecs_node" {
   name_prefix   = "${var.project}-ecs-node-"
   image_id      = data.aws_ami.ecs_optimized.id
@@ -87,7 +83,6 @@ resource "aws_launch_template" "ecs_node" {
 
   vpc_security_group_ids = [aws_security_group.ecs_node.id]
 
-  # Register this instance with the ECS cluster on boot
   user_data = base64encode(<<-EOF
     #!/bin/bash
     echo ECS_CLUSTER=${aws_ecs_cluster.main.name} >> /etc/ecs/ecs.config
@@ -118,7 +113,6 @@ resource "aws_launch_template" "ecs_node" {
   tags = var.common_tags
 }
 
-# Auto Scaling Group — spans all private subnets
 resource "aws_autoscaling_group" "ecs" {
   name                = "${var.project}-ecs-asg-${var.environment}"
   vpc_zone_identifier = var.private_subnet_ids
@@ -131,7 +125,7 @@ resource "aws_autoscaling_group" "ecs" {
     version = "$Latest"
   }
 
-  # Required for ECS managed scaling
+  # Required for ECS managed scaling to work correctly
   protect_from_scale_in = true
 
   tag {

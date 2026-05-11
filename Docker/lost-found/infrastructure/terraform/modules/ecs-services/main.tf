@@ -1,4 +1,3 @@
-# ── Auth Service Task Definition ──────────────────────────────────────────────
 resource "aws_ecs_task_definition" "auth" {
   family                   = "${var.project}-auth-service-${var.environment}"
   network_mode             = "bridge"
@@ -47,7 +46,6 @@ resource "aws_ecs_task_definition" "auth" {
   tags = var.common_tags
 }
 
-# ── Item Service Task Definition ───────────────────────────────────────────────
 resource "aws_ecs_task_definition" "item" {
   family                   = "${var.project}-item-service-${var.environment}"
   network_mode             = "bridge"
@@ -65,14 +63,14 @@ resource "aws_ecs_task_definition" "item" {
     essential = true
     portMappings = [{ containerPort = 3002, hostPort = 0, protocol = "tcp" }]
     environment = [
-      { name = "PORT",                    value = "3002" },
-      { name = "NODE_ENV",                value = "production" },
-      { name = "DB_HOST",                 value = replace(var.db_host, ":5432", "") },
-      { name = "DB_PORT",                 value = "5432" },
-      { name = "DB_NAME",                 value = "lostfound" },
-      { name = "DB_USER",                 value = "lostfound" },
-      { name = "AWS_REGION",              value = var.aws_region },
-      { name = "ITEM_CREATED_QUEUE_URL",  value = var.item_created_queue_url }
+      { name = "PORT",                   value = "3002" },
+      { name = "NODE_ENV",               value = "production" },
+      { name = "DB_HOST",                value = replace(var.db_host, ":5432", "") },
+      { name = "DB_PORT",                value = "5432" },
+      { name = "DB_NAME",                value = "lostfound" },
+      { name = "DB_USER",                value = "lostfound" },
+      { name = "AWS_REGION",             value = var.aws_region },
+      { name = "ITEM_CREATED_QUEUE_URL", value = var.item_created_queue_url }
     ]
     secrets = [
       { name = "DB_PASSWORD",        valueFrom = "arn:aws:secretsmanager:us-east-1:395063533284:secret:lostfound/db-password-ZcjEqX" },
@@ -98,7 +96,6 @@ resource "aws_ecs_task_definition" "item" {
   tags = var.common_tags
 }
 
-# ── Search Service ─────────────────────────────────────────────────────────────
 resource "aws_ecs_task_definition" "search" {
   family                   = "${var.project}-search-service-${var.environment}"
   network_mode             = "bridge"
@@ -145,7 +142,6 @@ resource "aws_ecs_task_definition" "search" {
   tags = var.common_tags
 }
 
-# ── Admin Service ──────────────────────────────────────────────────────────────
 resource "aws_ecs_task_definition" "admin" {
   family                   = "${var.project}-admin-service-${var.environment}"
   network_mode             = "bridge"
@@ -192,7 +188,6 @@ resource "aws_ecs_task_definition" "admin" {
   tags = var.common_tags
 }
 
-# ── Image Service ──────────────────────────────────────────────────────────────
 resource "aws_ecs_task_definition" "image" {
   family                   = "${var.project}-image-service-${var.environment}"
   network_mode             = "bridge"
@@ -234,7 +229,6 @@ resource "aws_ecs_task_definition" "image" {
   tags = var.common_tags
 }
 
-# ── Matching Service ───────────────────────────────────────────────────────────
 resource "aws_ecs_task_definition" "matching" {
   family                   = "${var.project}-matching-service-${var.environment}"
   network_mode             = "bridge"
@@ -283,7 +277,6 @@ resource "aws_ecs_task_definition" "matching" {
   tags = var.common_tags
 }
 
-# ── Notification Service ───────────────────────────────────────────────────────
 resource "aws_ecs_task_definition" "notification" {
   family                   = "${var.project}-notification-service-${var.environment}"
   network_mode             = "bridge"
@@ -326,14 +319,12 @@ resource "aws_ecs_task_definition" "notification" {
   tags = var.common_tags
 }
 
-# ── CloudWatch Log Group ───────────────────────────────────────────────────────
 resource "aws_cloudwatch_log_group" "ecs" {
   name              = "/ecs/${var.project}-${var.environment}"
   retention_in_days = 7
   tags              = var.common_tags
 }
 
-# ── ALB Target Groups ──────────────────────────────────────────────────────────
 resource "aws_lb_target_group" "auth" {
   name        = "${var.project}-auth-tg-${var.environment}"
   port        = 3001
@@ -414,7 +405,6 @@ resource "aws_lb_target_group" "image" {
   tags = var.common_tags
 }
 
-# ── ALB Listener Rules ─────────────────────────────────────────────────────────
 resource "aws_lb_listener_rule" "auth" {
   listener_arn = var.http_listener_arn
   priority     = 100
@@ -475,7 +465,6 @@ resource "aws_lb_listener_rule" "image" {
   }
 }
 
-# ── ECS Services ───────────────────────────────────────────────────────────────
 resource "aws_ecs_service" "auth" {
   name            = "${var.project}-auth-service-${var.environment}"
   cluster         = var.ecs_cluster_arn
@@ -520,7 +509,7 @@ resource "aws_ecs_service" "item" {
     container_port   = 3002
   }
   depends_on = [aws_lb_listener_rule.item]
-  tags = var.common_tags
+  tags       = var.common_tags
 }
 
 resource "aws_ecs_service" "search" {
@@ -538,7 +527,7 @@ resource "aws_ecs_service" "search" {
     container_port   = 3003
   }
   depends_on = [aws_lb_listener_rule.search]
-  tags = var.common_tags
+  tags       = var.common_tags
 }
 
 resource "aws_ecs_service" "admin" {
@@ -556,7 +545,7 @@ resource "aws_ecs_service" "admin" {
     container_port   = 3007
   }
   depends_on = [aws_lb_listener_rule.admin]
-  tags = var.common_tags
+  tags       = var.common_tags
 }
 
 resource "aws_ecs_service" "image" {
@@ -574,7 +563,7 @@ resource "aws_ecs_service" "image" {
     container_port   = 3006
   }
   depends_on = [aws_lb_listener_rule.image]
-  tags = var.common_tags
+  tags       = var.common_tags
 }
 
 resource "aws_ecs_service" "matching" {

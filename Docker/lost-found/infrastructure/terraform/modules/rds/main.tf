@@ -1,4 +1,3 @@
-# Security Group — only ECS nodes can reach the DB
 resource "aws_security_group" "rds" {
   name        = "${var.project}-rds-sg-${var.environment}"
   description = "RDS PostgreSQL - accept connections from ECS nodes only"
@@ -37,26 +36,26 @@ resource "aws_db_parameter_group" "postgres" {
 }
 
 resource "aws_db_instance" "primary" {
-  identifier              = "${var.project}-postgres-${var.environment}"
-  engine                  = "postgres"
-  engine_version          = "15"
-  instance_class          = "db.t3.medium"
-  allocated_storage       = 20
-  max_allocated_storage   = 100
-  storage_type            = "gp3"
-  storage_encrypted       = true
+  identifier            = "${var.project}-postgres-${var.environment}"
+  engine                = "postgres"
+  engine_version        = "15"
+  instance_class        = "db.t3.medium"
+  allocated_storage     = 20
+  max_allocated_storage = 100
+  storage_type          = "gp3"
+  storage_encrypted     = true
 
-  db_name                 = "lostfound"
-  username                = var.db_username
-  password                = var.db_password
-  parameter_group_name    = aws_db_parameter_group.postgres.name
-  db_subnet_group_name    = aws_db_subnet_group.main.name
-  vpc_security_group_ids  = [aws_security_group.rds.id]
+  db_name                = "lostfound"
+  username               = var.db_username
+  password               = var.db_password
+  parameter_group_name   = aws_db_parameter_group.postgres.name
+  db_subnet_group_name   = aws_db_subnet_group.main.name
+  vpc_security_group_ids = [aws_security_group.rds.id]
 
-  multi_az                = true
-  publicly_accessible     = false
-  deletion_protection     = false # Set true in prod
-  skip_final_snapshot     = true  # Set false in prod
+  multi_az            = true
+  publicly_accessible = false
+  deletion_protection = false # enable in prod
+  skip_final_snapshot = true  # disable in prod
 
   backup_retention_period = 7
   backup_window           = "03:00-04:00"
