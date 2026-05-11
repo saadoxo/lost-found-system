@@ -171,7 +171,7 @@ jobs:
 
           aws deploy create-deployment \
             --application-name lostfound-ecs-dev \
-            --deployment-group-name lostfound-auth-dg-dev \
+            --deployment-group-name lostfound-auth-service-dev \
             --revision "{\"revisionType\":\"AppSpecContent\",\"appSpecContent\":{\"content\":\"{\\\"version\\\":0,\\\"Resources\\\":[{\\\"TargetService\\\":{\\\"Type\\\":\\\"AWS::ECS::Service\\\",\\\"Properties\\\":{\\\"TaskDefinition\\\":\\\"$TASK_DEF\\\",\\\"LoadBalancerInfo\\\":{\\\"ContainerName\\\":\\\"auth-service\\\",\\\"ContainerPort\\\":3001}}}}]}\"}}" \
             --region $AWS_REGION
 
