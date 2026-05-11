@@ -1,22 +1,47 @@
 import json
-import logging
 import os
 import threading
 import time
+import urllib.error
+import urllib.request
+from datetime import datetime
 
 import boto3
 from fastapi import FastAPI
 
-logging.basicConfig(
-    level=logging.INFO,
-    format='{"time": "%(asctime)s", "level": "%(levelname)s", "service": "notification-service", "message": "%(message)s"}'
-)
-logger = logging.getLogger(__name__)
-
 app = FastAPI(title="Notification Service", version="1.0.0")
 
-# Email sender — must be verified in SES
 SENDER_EMAIL = os.environ.get("SENDER_EMAIL", "noreply@lostfound.internal")
+
+
+def log(level: str, message: str, **kwargs):
+    """Structured JSON to stdout — captured by CloudWatch."""
+    entry = {
+        "time": datetime.utcnow().isoformat(),
+        "level": level,
+        "service": "notification-service",
+        "message": message,
+    }
+    entry.update(kwargs)
+    print(json.dumps(entry), flush=True)
+
+
+def lookup_user_email(user_id: str) -> str | None:
+    """
+    Fetch user email from auth-service via the internal ALB.
+    Returns None if unreachable (local dev or ALB not set).
+    """
+    internal_alb = os.environ.get("INTERNAL_ALB_DNS")
+    if not internal_alb:
+        return None
+    try:
+        url = f"http://{internal_alb}/auth/users/{user_id}/email"
+        with urllib.request.urlopen(url, timeout=3) as resp:
+            data = json.loads(resp.read())
+            return data.get("email")
+    except Exception as exc:
+        log("warn", "could not fetch user email", userId=user_id, error=str(exc))
+        return None
 
 
 def send_email(ses, to_address: str, subject: str, body_text: str, body_html: str):
@@ -33,31 +58,9 @@ def send_email(ses, to_address: str, subject: str, body_text: str, body_html: st
     )
 
 
-def lookup_user_email(user_id: str) -> str | None:
-    """
-    Fetch user email from the auth service via internal ALB.
-    Falls back to None if the internal ALB isn't reachable (local dev).
-    """
-    internal_alb = os.environ.get("INTERNAL_ALB_DNS")
-    if not internal_alb:
-        return None
-
-    import urllib.request
-    import urllib.error
-
-    try:
-        url = f"http://{internal_alb}/auth/users/{user_id}/email"
-        with urllib.request.urlopen(url, timeout=3) as resp:
-            data = json.loads(resp.read())
-            return data.get("email")
-    except Exception as exc:
-        logger.warning(f"Could not fetch email for user {user_id}: {exc}")
-        return None
-
-
 def handle_match_found(match_data: dict):
     """
-    Sends email notifications to both the lost-item owner and the found-item owner
+    Send email to both the lost-item owner and found-item owner
     when the matching service detects a potential match.
     """
     region = os.environ.get("AWS_REGION", "us-east-1")
@@ -80,7 +83,7 @@ def handle_match_found(match_data: dict):
 
         email = lookup_user_email(user_id)
         if not email:
-            logger.warning(f"No email for user {user_id} — skipping notification")
+            log("warn", "no email for user — skipping notification", userId=user_id)
             continue
 
         body_text = (
@@ -105,21 +108,20 @@ def handle_match_found(match_data: dict):
 
         try:
             send_email(ses, email, subject, body_text, body_html)
-            logger.info(f"Email sent to user {user_id} ({role}) for match lost={lost_item_id} found={found_item_id}")
-        except ses.exceptions.MessageRejected as exc:
-            logger.error(f"SES rejected email for {user_id}: {exc}")
+            log("info", "email sent", userId=user_id, role=role,
+                lostItemId=lost_item_id, foundItemId=found_item_id)
         except Exception as exc:
-            logger.error(f"Failed to send email for {user_id}: {exc}")
+            log("error", "SES send failed", userId=user_id, error=str(exc))
 
 
 def consume_queue():
     queue_url = os.environ.get("MATCH_FOUND_QUEUE_URL")
     if not queue_url:
-        logger.info("MATCH_FOUND_QUEUE_URL not set — queue consumer disabled (local dev)")
+        log("info", "MATCH_FOUND_QUEUE_URL not set — consumer disabled (local dev)")
         return
 
     sqs = boto3.client("sqs", region_name=os.environ.get("AWS_REGION", "us-east-1"))
-    logger.info("Notification service queue consumer started")
+    log("info", "Notification service queue consumer started", queue=queue_url)
 
     while True:
         try:
@@ -130,22 +132,20 @@ def consume_queue():
             )
             for msg in resp.get("Messages", []):
                 try:
-                    # Messages from SNS are wrapped in an envelope
+                    # SNS wraps the payload in an outer envelope with a "Message" field
                     outer = json.loads(msg["Body"])
-                    # SNS wraps the payload in a "Message" string field
-                    if "Message" in outer:
-                        inner = json.loads(outer["Message"])
-                    else:
-                        inner = outer
-
+                    inner = json.loads(outer["Message"]) if "Message" in outer else outer
                     match_data = inner.get("data", {})
-                    logger.info(f"Received match_found event: lost={match_data.get('lostItemId')} found={match_data.get('foundItemId')}")
+                    log("info", "received match_found event",
+                        lostItemId=match_data.get("lostItemId"),
+                        foundItemId=match_data.get("foundItemId"),
+                        score=match_data.get("score"))
                     handle_match_found(match_data)
                     sqs.delete_message(QueueUrl=queue_url, ReceiptHandle=msg["ReceiptHandle"])
                 except Exception as exc:
-                    logger.error(f"Message processing failed: {exc}")
+                    log("error", "message processing failed", error=str(exc))
         except Exception as exc:
-            logger.error(f"SQS receive error: {exc}")
+            log("error", "SQS receive error", error=str(exc))
             time.sleep(5)
 
 

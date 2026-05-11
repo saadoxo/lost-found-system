@@ -1,5 +1,4 @@
 import json
-import logging
 import os
 import threading
 import time
@@ -8,15 +7,21 @@ from datetime import datetime, timedelta
 import boto3
 import psycopg2
 import psycopg2.extras
-from fastapi import FastAPI
-
-logging.basicConfig(
-    level=logging.INFO,
-    format='{"time": "%(asctime)s", "level": "%(levelname)s", "service": "matching-service", "message": "%(message)s"}'
-)
-logger = logging.getLogger(__name__)
+from fastapi import FastAPI, Response
 
 app = FastAPI(title="Matching Service", version="1.0.0")
+
+
+def log(level: str, message: str, **kwargs):
+    """Structured JSON to stdout — captured by CloudWatch."""
+    entry = {
+        "time": datetime.utcnow().isoformat(),
+        "level": level,
+        "service": "matching-service",
+        "message": message,
+    }
+    entry.update(kwargs)
+    print(json.dumps(entry), flush=True)
 
 
 def get_db():
@@ -38,7 +43,7 @@ def score_match(new_item: dict, candidate: dict) -> float:
     """
     score = 0.0
 
-    # Category must match exactly — hard requirement
+    # Category must match exactly
     if new_item.get("category") != candidate.get("category"):
         return 0.0
     score += 0.40
@@ -50,7 +55,7 @@ def score_match(new_item: dict, candidate: dict) -> float:
         overlap = len(new_loc & cand_loc) / max(len(new_loc), len(cand_loc))
         score += 0.35 * overlap
 
-    # Date proximity: full score within 7 days, sliding down to 0 at 30 days
+    # Date proximity: full score within 7 days, sliding to 0 at 30 days
     try:
         d1 = datetime.fromisoformat(str(new_item.get("date")))
         d2 = datetime.fromisoformat(str(candidate.get("date")))
@@ -65,11 +70,10 @@ def score_match(new_item: dict, candidate: dict) -> float:
     return round(score, 3)
 
 
-def find_matches(item: dict) -> list[dict]:
+def find_matches(item: dict) -> list:
     """
-    Query the DB for items of the opposite type in the same category,
-    created within 30 days, and score each one.
-    Returns candidates with score >= 0.5, sorted best-first.
+    Query RDS for items of the opposite type in the same category
+    within 30 days. Returns candidates scoring >= 0.5, best first.
     """
     opposite = "found" if item.get("type") == "lost" else "lost"
     cutoff = (datetime.utcnow() - timedelta(days=30)).date()
@@ -94,7 +98,7 @@ def find_matches(item: dict) -> list[dict]:
         cur.close()
         conn.close()
     except Exception as exc:
-        logger.error(f"DB query failed: {exc}")
+        log("error", "DB query failed", error=str(exc))
         return []
 
     results = []
@@ -104,7 +108,7 @@ def find_matches(item: dict) -> list[dict]:
             results.append({"item": dict(candidate), "score": s})
 
     results.sort(key=lambda x: x["score"], reverse=True)
-    return results[:5]  # top 5 matches only
+    return results[:5]
 
 
 def publish_match_found(sqs, queue_url: str, new_item: dict, match: dict):
@@ -120,18 +124,21 @@ def publish_match_found(sqs, queue_url: str, new_item: dict, match: dict):
         },
     }
     sqs.send_message(QueueUrl=queue_url, MessageBody=json.dumps(payload))
-    logger.info(f"match_found published: lost={payload['data']['lostItemId']} found={payload['data']['foundItemId']} score={match['score']}")
+    log("info", "match_found published",
+        lostItemId=payload["data"]["lostItemId"],
+        foundItemId=payload["data"]["foundItemId"],
+        score=match["score"])
 
 
 def process_item(item: dict):
     match_queue_url = os.environ.get("MATCH_FOUND_QUEUE_URL")
     if not match_queue_url:
-        logger.warning("MATCH_FOUND_QUEUE_URL not set — skipping publish")
+        log("warn", "MATCH_FOUND_QUEUE_URL not set — skipping publish")
         return
 
     matches = find_matches(item)
     if not matches:
-        logger.info(f"No matches found for item id={item.get('id')}")
+        log("info", "no matches found", itemId=item.get("id"))
         return
 
     sqs = boto3.client("sqs", region_name=os.environ.get("AWS_REGION", "us-east-1"))
@@ -139,17 +146,17 @@ def process_item(item: dict):
         try:
             publish_match_found(sqs, match_queue_url, item, match)
         except Exception as exc:
-            logger.error(f"Failed to publish match_found: {exc}")
+            log("error", "failed to publish match_found", error=str(exc))
 
 
 def consume_queue():
     queue_url = os.environ.get("ITEM_CREATED_QUEUE_URL")
     if not queue_url:
-        logger.info("ITEM_CREATED_QUEUE_URL not set — queue consumer disabled (local dev)")
+        log("info", "ITEM_CREATED_QUEUE_URL not set — consumer disabled (local dev)")
         return
 
     sqs = boto3.client("sqs", region_name=os.environ.get("AWS_REGION", "us-east-1"))
-    logger.info("Matching service queue consumer started")
+    log("info", "Matching service queue consumer started", queue=queue_url)
 
     while True:
         try:
@@ -162,13 +169,16 @@ def consume_queue():
                 try:
                     body = json.loads(msg["Body"])
                     item_data = body.get("data", {})
-                    logger.info(f"Processing item id={item_data.get('id')} type={item_data.get('type')}")
+                    log("info", "processing item",
+                        itemId=item_data.get("id"),
+                        itemType=item_data.get("type"),
+                        category=item_data.get("category"))
                     process_item(item_data)
                     sqs.delete_message(QueueUrl=queue_url, ReceiptHandle=msg["ReceiptHandle"])
                 except Exception as exc:
-                    logger.error(f"Message processing failed: {exc}")
+                    log("error", "message processing failed", error=str(exc))
         except Exception as exc:
-            logger.error(f"SQS receive error: {exc}")
+            log("error", "SQS receive error", error=str(exc))
             time.sleep(5)
 
 
@@ -185,11 +195,10 @@ def health():
 
 @app.get("/ready")
 def ready():
-    # Check DB connectivity before reporting ready
     try:
         conn = get_db()
         conn.close()
         return {"status": "ready", "service": "matching-service"}
-    except Exception:
-        from fastapi import Response
-        return Response(content='{"status":"not ready"}', status_code=503)
+    except Exception as exc:
+        log("warn", "ready check failed — DB not reachable", error=str(exc))
+        return Response(content='{"status":"not ready"}', status_code=503, media_type="application/json")
