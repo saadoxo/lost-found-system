@@ -22,6 +22,11 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok', service: 'auth-service' });
 });
 
+// ALB routes /auth/* to this service, so /auth/health also needs to respond
+app.get('/auth/health', (req, res) => {
+  res.json({ status: 'ok', service: 'auth-service' });
+});
+
 app.get('/ready', async (req, res) => {
   const db = require('./config/database');
   try {

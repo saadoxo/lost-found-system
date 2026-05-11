@@ -16,6 +16,7 @@ const BUCKET = process.env.S3_BUCKET;
 const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 
 app.get('/health', (req, res) => res.json({ status: 'ok', service: 'image-service' }));
+app.get('/images/health', (req, res) => res.json({ status: 'ok', service: 'image-service' }));
 app.get('/ready',  (req, res) => res.json({ status: 'ready', service: 'image-service' }));
 
 app.post('/images/upload-url', async (req, res) => {

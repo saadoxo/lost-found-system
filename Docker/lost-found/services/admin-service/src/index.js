@@ -18,6 +18,7 @@ const pool = new Pool({
 });
 
 app.get('/health', (req, res) => res.json({ status: 'ok', service: 'admin-service' }));
+app.get('/admin/health', (req, res) => res.json({ status: 'ok', service: 'admin-service' }));
 app.get('/ready',  async (req, res) => {
   try { await pool.query('SELECT 1'); res.json({ status: 'ready' }); }
   catch { res.status(503).json({ status: 'not ready' }); }

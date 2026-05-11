@@ -9,6 +9,7 @@ app.use(express.json({ limit: '10kb' }));
 app.set('trust proxy', 1);
 
 app.get('/health', (req, res) => res.json({ status: 'ok', service: 'item-service' }));
+app.get('/items/health', (req, res) => res.json({ status: 'ok', service: 'item-service' }));
 app.get('/ready',  async (req, res) => {
   const db = require('./config/database');
   try { await db.query('SELECT 1'); res.json({ status: 'ready' }); }
