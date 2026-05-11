@@ -87,7 +87,7 @@ def find_matches(item: dict) -> list:
             FROM items
             WHERE type = %s
               AND category = %s
-              AND status = 'active'
+              AND status NOT IN ('claimed', 'resolved')
               AND date >= %s
               AND id != %s
             LIMIT 50
