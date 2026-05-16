@@ -2,7 +2,6 @@
 
 Production-grade Lost & Found web application built as microservices on AWS for the Cloudelligent Cloud Internship. All infrastructure is Terraform, all services are Dockerized, deployed to ECS EC2 (no Fargate, no Lambda).
 
-**Live endpoint:** `http://lostfound-alb-dev-1030859096.us-east-1.elb.amazonaws.com`
 
 ---
 
